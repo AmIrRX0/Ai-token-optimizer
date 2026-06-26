@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>AI Token Saver</title>
+<link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header class="ats-header">
+    <div class="ats-brand">
+      <span class="ats-mark">⚡</span>
+      <span class="ats-name">AI Token Saver</span>
+    </div>
+    <label class="ats-switch" title="Enable / disable everywhere">
+      <input type="checkbox" id="enabled-toggle" />
+      <span class="ats-slider"></span>
+    </label>
+  </header>
+
+  <section class="ats-hero">
+    <div class="ats-hero-number" id="tokens-saved">0</div>
+    <div class="ats-hero-label">tokens saved, lifetime</div>
+  </section>
+
+  <section class="ats-card">
+    <div class="ats-card-title">Compression</div>
+
+    <div class="ats-row">
+      <span>Auto-compress on send</span>
+      <label class="ats-switch ats-switch-sm">
+        <input type="checkbox" id="auto-compress-toggle" />
+        <span class="ats-slider"></span>
+      </label>
+    </div>
+
+    <div class="ats-row ats-row-col">
+      <span>Level</span>
+      <div class="ats-segmented" id="level-segmented">
+        <button data-level="light">Light</button>
+        <button data-level="medium">Medium</button>
+        <button data-level="aggressive">Aggressive</button>
+      </div>
+    </div>
+
+    <div class="ats-row">
+      <span>Show live token counter</span>
+      <label class="ats-switch ats-switch-sm">
+        <input type="checkbox" id="counter-toggle" />
+        <span class="ats-slider"></span>
+      </label>
+    </div>
+  </section>
+
+  <section class="ats-card">
+    <div class="ats-card-title">Rate-limit warnings</div>
+
+    <div class="ats-row">
+      <span>Warn me before I hit the limit</span>
+      <label class="ats-switch ats-switch-sm">
+        <input type="checkbox" id="rate-warning-toggle" />
+        <span class="ats-slider"></span>
+      </label>
+    </div>
+
+    <div class="ats-row ats-row-col">
+      <span>Warn at <b id="threshold-value">80</b>% of estimated limit</span>
+      <input type="range" id="threshold-slider" min="50" max="95" step="5" />
+    </div>
+
+    <div class="ats-card-title ats-subtitle">This site right now</div>
+    <div id="site-status" class="ats-site-status">
+      <span class="ats-muted">Open a supported AI chat to see live status.</span>
+    </div>
+  </section>
+
+  <section class="ats-card">
+    <div class="ats-card-title">
+      Prompt library
+      <span class="ats-count-badge" id="library-count">0</span>
+    </div>
+    <div id="library-list" class="ats-library-list">
+      <span class="ats-muted">No saved prompts yet. Use 💾 next to any chat box to save one.</span>
+    </div>
+  </section>
+
+  <footer class="ats-footer">
+    <button id="reset-stats-btn" class="ats-link-btn">Reset stats</button>
+    <a href="https://github.com/AmIrRX0/Ai-token-optimizer" target="_blank" rel="noopener" id="github-link" class="ats-link-btn">View on GitHub ↗</a>
+  </footer>
+
+  <script src="../utils/storage.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
