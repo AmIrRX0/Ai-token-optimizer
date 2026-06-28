@@ -17,24 +17,28 @@
         '[contenteditable="true"]'
       ],
       sendButtonSelectors: ['button[aria-label*="Send"]', 'button[data-testid*="send"]'],
+      messageSelectors: { user: '[data-testid="user-message"]', assistant: '.font-claude-message' },
     },
     'chatgpt.com': {
       name: 'ChatGPT',
       color: '#10a37f',
       inputSelectors: ['#prompt-textarea', 'textarea[placeholder*="Message"]', 'div[contenteditable="true"]'],
       sendButtonSelectors: ['button[data-testid="send-button"]', 'button[aria-label*="Send"]'],
+      messageSelectors: { user: '[data-message-author-role="user"]', assistant: '[data-message-author-role="assistant"]' },
     },
     'chat.openai.com': {
       name: 'ChatGPT',
       color: '#10a37f',
       inputSelectors: ['#prompt-textarea', 'textarea[placeholder*="Message"]'],
       sendButtonSelectors: ['button[data-testid="send-button"]', 'button[aria-label*="Send"]'],
+      messageSelectors: { user: '[data-message-author-role="user"]', assistant: '[data-message-author-role="assistant"]' },
     },
     'gemini.google.com': {
       name: 'Gemini',
       color: '#4285f4',
       inputSelectors: ['rich-textarea .ql-editor', 'div[contenteditable="true"]', 'textarea'],
       sendButtonSelectors: ['button.send-button', 'button[aria-label*="Send"]', 'button[mattooltip*="Send"]'],
+      messageSelectors: { user: '.query-text', assistant: '.model-response-text' },
     },
     'aistudio.google.com': {
       name: 'AI Studio',
@@ -292,16 +296,19 @@
       <div id="ats-toolbar-inner">
         <span id="ats-logo">⚡ ATS</span>
         <div id="ats-actions">
+          <button id="ats-open-chats" title="Save / recall chat memory">💬</button>
           <button id="ats-open-library" title="Open Prompt Library">📚</button>
           <button id="ats-toggle" title="Toggle AI Token Saver" style="color:${settings?.enabled ? '#22c55e' : '#ef4444'}">●</button>
         </div>
       </div>
       <div id="ats-library-panel" style="display:none;"></div>
+      <div id="ats-chats-panel" style="display:none;"></div>
     `;
     document.body.appendChild(toolbar);
 
     document.getElementById('ats-toggle')?.addEventListener('click', toggleEnabled);
     document.getElementById('ats-open-library')?.addEventListener('click', toggleLibrary);
+    document.getElementById('ats-open-chats')?.addEventListener('click', toggleChats);
   }
 
   function toggleEnabled() {
@@ -368,6 +375,160 @@
         });
       });
     }
+  }
+
+  // ── Chat memory (capture → recap → recall) ──────────────────────────────────
+  // Read the conversation off the page using the per-site message selectors,
+  // falling back to a generic role attribute. Returns ordered [{role, text}].
+  function captureConversation() {
+    const sel = SITE.messageSelectors;
+    const nodes = [];
+
+    if (sel?.user || sel?.assistant) {
+      collectRole(sel.user, 'user', nodes);
+      collectRole(sel.assistant, 'assistant', nodes);
+    }
+    // Generic fallback: OpenAI-style role attribute used by several UIs.
+    if (nodes.length === 0) {
+      document.querySelectorAll('[data-message-author-role]').forEach((el) => {
+        const role = el.getAttribute('data-message-author-role') === 'user' ? 'user' : 'assistant';
+        pushNode(el, role, nodes);
+      });
+    }
+
+    // Sort by DOM order so the recap reads chronologically.
+    nodes.sort((a, b) => {
+      const pos = a.el.compareDocumentPosition(b.el);
+      if (pos & Node.DOCUMENT_POSITION_FOLLOWING) return -1;
+      if (pos & Node.DOCUMENT_POSITION_PRECEDING) return 1;
+      return 0;
+    });
+
+    return nodes.map(({ role, text }) => ({ role, text }));
+  }
+
+  function collectRole(selector, role, out) {
+    if (!selector) return;
+    try {
+      document.querySelectorAll(selector).forEach((el) => pushNode(el, role, out));
+    } catch (_) {
+      /* invalid selector after a site change — ignore */
+    }
+  }
+
+  function pushNode(el, role, out) {
+    if (!el || el.closest('#ats-toolbar')) return; // skip our own UI
+    const text = (el.innerText || el.textContent || '').trim();
+    if (text) out.push({ el, role, text });
+  }
+
+  async function handleSaveChat() {
+    if (!settings?.enabled) return;
+    if (settings?.contextSummary === false) {
+      showToast('Chat memory is off — enable it in Settings.', 'warn');
+      return;
+    }
+
+    const messages = captureConversation();
+    if (messages.length === 0) {
+      showToast("Couldn't read messages on this site yet 🤔", 'warn', 4000);
+      return;
+    }
+
+    const date = new Date().toLocaleDateString();
+    const recap = window.TokenSaver?.buildRecap(messages, {
+      site: SITE.name,
+      date,
+      budget: settings?.contextBudget || 200,
+    }) || '';
+
+    if (!recap) {
+      showToast('Nothing worth saving from this chat.', 'warn');
+      return;
+    }
+
+    const tokens = window.TokenSaver?.estimateTokens(recap) ?? 0;
+    const firstUser = messages.find((m) => m.role === 'user');
+    const title = (firstUser?.text || messages[0].text).slice(0, 60);
+    const fullText = messages.map((m) => `${m.role === 'user' ? 'You' : SITE.name}: ${m.text}`).join('\n\n');
+
+    await sendMessage({
+      type: 'SAVE_CHAT',
+      site: SITE.name,
+      title,
+      summary: recap,
+      tokens,
+      messageCount: messages.length,
+      fullText,
+    });
+    showToast(`💬 Chat saved (~${tokens}-token recap)`);
+  }
+
+  async function toggleChats() {
+    const panel = document.getElementById('ats-chats-panel');
+    if (!panel) return;
+    if (panel.style.display !== 'none') {
+      panel.style.display = 'none';
+      return;
+    }
+    await renderChats();
+    panel.style.display = 'block';
+  }
+
+  async function renderChats() {
+    const panel = document.getElementById('ats-chats-panel');
+    if (!panel) return;
+    const { chats } = await sendMessage({ type: 'GET_CHATS' });
+    const saveBtn = `<button id="ats-save-chat-btn" class="ats-chat-save">＋ Save this chat</button>`;
+
+    if (!chats || chats.length === 0) {
+      panel.innerHTML = `
+        <div class="ats-chats-head">CHAT MEMORY</div>
+        ${saveBtn}
+        <p style="padding:10px;color:#9ca3af;font-size:12px;">No saved chats yet.<br>Save one, then paste its recap into a new chat.</p>`;
+    } else {
+      panel.innerHTML = `
+        <div class="ats-chats-head">CHAT MEMORY (${chats.length})</div>
+        ${saveBtn}
+        ${chats.map((c) => `
+          <div class="ats-prompt-item" data-id="${c.id}">
+            <span class="ats-prompt-title">${escapeHtml(c.title)}</span>
+            <div class="ats-prompt-meta">${escapeHtml(c.site)} · ~${c.tokens} tok · ${c.messageCount} msgs</div>
+            <div class="ats-prompt-actions">
+              <button class="ats-recap-btn" data-id="${c.id}" title="Insert recap into the chat box">↺ Recap</button>
+              <button class="ats-del-chat-btn" data-id="${c.id}">✕</button>
+            </div>
+          </div>
+        `).join('')}`;
+    }
+
+    document.getElementById('ats-save-chat-btn')?.addEventListener('click', async () => {
+      await handleSaveChat();
+      await renderChats();
+    });
+
+    panel.querySelectorAll('.ats-recap-btn').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const { chats: list } = await sendMessage({ type: 'GET_CHATS' });
+        const chat = (list || []).find((c) => c.id === btn.dataset.id);
+        if (chat && activeInput) {
+          setText(chat.summary);
+          updateCounter();
+          panel.style.display = 'none';
+          activeInput.focus();
+          showToast('↺ Recap inserted — edit as needed, then send.');
+        } else if (!activeInput) {
+          showToast('Click into the chat box first.', 'warn');
+        }
+      });
+    });
+
+    panel.querySelectorAll('.ats-del-chat-btn').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        await sendMessage({ type: 'DELETE_CHAT', id: btn.dataset.id });
+        await renderChats();
+      });
+    });
   }
 
   // ── Utilities ───────────────────────────────────────────────────────────────

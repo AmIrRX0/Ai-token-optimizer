@@ -50,6 +50,25 @@
       <p class="status" id="lib-status"></p>
     </section>
 
+    <section class="card">
+      <h2>Chat memory</h2>
+      <p class="hint">Save a chat and paste a compact <b>recap</b> into a new one so the model
+        keeps the context — for a fraction of the tokens. The recap is built locally from
+        your messages (no AI, no upload). Manage saved chats from the 💬 button on any chat page.</p>
+      <div class="site-row">
+        <span class="name">Recap token budget</span>
+        <span class="ctrl">
+          <input type="number" id="context-budget" min="60" max="1000" step="20" value="200" />
+          <span class="unit">tokens</span>
+        </span>
+      </div>
+      <div class="btn-row" style="margin-top:12px;">
+        <span class="hint" id="chats-count" style="margin:0;align-self:center;">0 saved</span>
+        <button id="clear-chats-btn" class="btn btn-danger">Clear all saved chats</button>
+      </div>
+      <p class="status" id="chats-status"></p>
+    </section>
+
     <section class="card danger">
       <h2>Reset</h2>
       <p class="hint">Clears your lifetime token-savings counter and message history.

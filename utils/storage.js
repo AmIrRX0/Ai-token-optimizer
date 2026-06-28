@@ -62,5 +62,30 @@ window.ATSStorage = {
     return new Promise((resolve) => {
       chrome.runtime.sendMessage({ type: 'RESET_STATS' }, resolve);
     });
+  },
+
+  // ── Saved chats (cross-session memory) ──────────────────────
+  async saveChat(chat) {
+    return new Promise((resolve) => {
+      chrome.runtime.sendMessage({ type: 'SAVE_CHAT', ...chat }, resolve);
+    });
+  },
+
+  async getChats() {
+    return new Promise((resolve) => {
+      chrome.runtime.sendMessage({ type: 'GET_CHATS' }, resolve);
+    });
+  },
+
+  async deleteChat(id) {
+    return new Promise((resolve) => {
+      chrome.runtime.sendMessage({ type: 'DELETE_CHAT', id }, resolve);
+    });
+  },
+
+  async clearChats() {
+    return new Promise((resolve) => {
+      chrome.runtime.sendMessage({ type: 'CLEAR_CHATS' }, resolve);
+    });
   }
 };

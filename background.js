@@ -33,6 +33,7 @@ chrome.runtime.onInstalled.addListener(async ({ reason }) => {
       messageCounts: {},   // { hostname: [timestamps] }
       totalSaved: 0,       // total tokens saved (estimated)
       promptLibrary: [],   // saved prompts
+      savedChats: [],      // saved chat recaps for cross-session memory
       sessionStats: {}     // per-tab stats
     });
     console.log('[AI Token Saver] Installed & initialized.');
@@ -138,6 +139,48 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       case 'EXPORT_LIBRARY': {
         const data = await getLocalData();
         sendResponse({ library: data.promptLibrary || [] });
+        break;
+      }
+
+      case 'SAVE_CHAT': {
+        // Store a captured chat + its recap for cross-session memory.
+        const data = await getLocalData();
+        const chats = data.savedChats || [];
+        const entry = {
+          id: Date.now().toString(),
+          site: msg.site || 'AI chat',
+          title: msg.title || 'Saved chat',
+          summary: msg.summary || '',
+          tokens: msg.tokens || 0,
+          messageCount: msg.messageCount || 0,
+          // Cap stored transcript to avoid bloating local storage.
+          fullText: (msg.fullText || '').slice(0, 20000),
+          created: Date.now(),
+        };
+        chats.unshift(entry);
+        if (chats.length > 20) chats.splice(20); // keep 20 newest
+        await chrome.storage.local.set({ savedChats: chats });
+        sendResponse({ ok: true, entry, total: chats.length });
+        break;
+      }
+
+      case 'GET_CHATS': {
+        const data = await getLocalData();
+        sendResponse({ chats: data.savedChats || [] });
+        break;
+      }
+
+      case 'DELETE_CHAT': {
+        const data = await getLocalData();
+        const chats = (data.savedChats || []).filter((c) => c.id !== msg.id);
+        await chrome.storage.local.set({ savedChats: chats });
+        sendResponse({ ok: true, total: chats.length });
+        break;
+      }
+
+      case 'CLEAR_CHATS': {
+        await chrome.storage.local.set({ savedChats: [] });
+        sendResponse({ ok: true });
         break;
       }
 
