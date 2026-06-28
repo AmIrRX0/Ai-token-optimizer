@@ -17,8 +17,6 @@ A free, open-source browser extension that shows a **live token counter**, **com
 
 <br>
 
-<sub>⤴ Replace this with a real screenshot — see <code>docs/README.md</code>.</sub>
-
 </div>
 
 ---
