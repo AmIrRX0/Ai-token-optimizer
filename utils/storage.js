@@ -38,6 +38,20 @@ window.ATSStorage = {
     });
   },
 
+  /** Export the full prompt library (for backup / transfer) */
+  async exportLibrary() {
+    return new Promise((resolve) => {
+      chrome.runtime.sendMessage({ type: 'EXPORT_LIBRARY' }, resolve);
+    });
+  },
+
+  /** Merge an imported prompt library into storage */
+  async importLibrary(library) {
+    return new Promise((resolve) => {
+      chrome.runtime.sendMessage({ type: 'IMPORT_LIBRARY', library }, resolve);
+    });
+  },
+
   async deletePrompt(id) {
     return new Promise((resolve) => {
       chrome.runtime.sendMessage({ type: 'DELETE_PROMPT', id }, resolve);

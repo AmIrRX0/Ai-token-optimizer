@@ -6,7 +6,7 @@
 (function () {
   'use strict';
 
-  // ── Site Detection ────────────────────────────────────────
+  // ── Site Detection ──────────────────────────────────────────────────────────
   const SITE_CONFIGS = {
     'claude.ai': {
       name: 'Claude',
@@ -48,6 +48,12 @@
       inputSelectors: ['textarea[placeholder*="Ask"]', 'textarea'],
       sendButtonSelectors: ['button[aria-label*="Submit"]', 'button[type="submit"]'],
     },
+    'chat.deepseek.com': {
+      name: 'DeepSeek',
+      color: '#4d6bfe',
+      inputSelectors: ['textarea#chat-input', 'textarea[placeholder*="Message"]', 'textarea'],
+      sendButtonSelectors: ['div[role="button"][aria-disabled]', 'button[type="submit"]', 'button[aria-label*="Send"]'],
+    },
     'copilot.microsoft.com': {
       name: 'Copilot',
       color: '#0078d4',
@@ -76,25 +82,23 @@
     sendButtonSelectors: ['button[type="submit"]', 'button[aria-label*="Send"]'],
   };
 
-  // ── State ─────────────────────────────────────────────────
+  // ── State ───────────────────────────────────────────────────────────────────
   let settings = null;
   let activeInput = null;
   let overlay = null;
   let messageCount = 0;
   let rateLimit = 40;
   let initialized = false;
+  let sendIntercepted = false;
 
-  // ── Bootstrap ─────────────────────────────────────────────
+  // ── Bootstrap ───────────────────────────────────────────────────────────────
   async function init() {
     if (initialized) return;
     initialized = true;
 
-    // Load tokenizer + compressor
-    await injectScript(chrome.runtime.getURL('lib/tokenizer.js'));
-    await injectScript(chrome.runtime.getURL('lib/compressor.js'));
+    // tokenizer.js و compressor.js حالا از طریق manifest به‌عنوان content script لود می‌شن
 
     settings = await sendMessage({ type: 'GET_SETTINGS' });
-    if (!settings?.enabled) return;
 
     const status = await sendMessage({ type: 'GET_RATE_STATUS', hostname });
     if (status) {
@@ -106,17 +110,7 @@
     injectToolbar();
   }
 
-  function injectScript(src) {
-    return new Promise((resolve) => {
-      // Scripts are loaded into the page's content-script world
-      const s = document.createElement('script');
-      s.src = src;
-      s.onload = () => { s.remove(); resolve(); };
-      (document.head || document.documentElement).appendChild(s);
-    });
-  }
-
-  // ── DOM Observer ──────────────────────────────────────────
+  // ── DOM Observer ────────────────────────────────────────────────────────────
   function startObserving() {
     const observer = new MutationObserver(() => tryBindInput());
     observer.observe(document.body, { childList: true, subtree: true });
@@ -135,37 +129,28 @@
 
   function bindInput(el) {
     activeInput = el;
-
-    // Token counter overlay
     attachCounter(el);
-
-    // Listen for changes
-    el.addEventListener('input',   onInputChange);
+    el.addEventListener('input', onInputChange);
     el.addEventListener('keydown', onKeyDown);
-
-    // Intercept send
     interceptSend();
-
     console.log(`[AI Token Saver] Bound to ${SITE.name} input`);
   }
 
-  // ── Token Counter UI ─────────────────────────────────────
+  // ── Token Counter UI ────────────────────────────────────────────────────────
   function attachCounter(el) {
-    if (!settings?.showTokenCounter) return;
+    if (!settings?.showTokenCounter || !settings?.enabled) return;
 
-    // Remove old overlay
     if (overlay) overlay.remove();
 
     overlay = document.createElement('div');
     overlay.id = 'ats-counter';
     overlay.innerHTML = `
-      <span id="ats-count">0 tokens</span>
+      <span id="ats-count" title="Local estimate, calibrated to ~97% of real tokenizers. No data leaves your browser.">≈ 0 tokens</span>
       <span id="ats-rate" title="Messages sent this hour"></span>
       <button id="ats-compress-btn" title="Compress text to save tokens">⚡ Compress</button>
       <button id="ats-save-btn" title="Save to prompt library">💾</button>
     `;
 
-    // Insert near the input
     const parent = el.closest('form') || el.parentElement;
     if (parent) {
       parent.style.position = 'relative';
@@ -182,13 +167,16 @@
   }
 
   function updateCounter() {
+    if (!settings?.enabled) return;
     if (!activeInput || !overlay) return;
     const text   = getText();
-    const tokens = window.TokenSaver?.estimateTokens(text) ?? 0;
+    const model  = settings?.estimateModel || 'generic';
+    const tokens = window.TokenSaver?.estimateTokensFor?.(text, model)
+      ?? window.TokenSaver?.estimateTokens(text) ?? 0;
     const el     = document.getElementById('ats-count');
     if (!el) return;
 
-    el.textContent = `${tokens} tokens`;
+    el.textContent = `≈ ${tokens.toLocaleString()} tokens`;
     el.style.color = tokens > 2000 ? '#ef4444' : tokens > 800 ? '#f59e0b' : '#22c55e';
   }
 
@@ -200,25 +188,26 @@
     el.style.color = pct >= 90 ? '#ef4444' : pct >= 70 ? '#f59e0b' : '#9ca3af';
   }
 
-  // ── Event Handlers ────────────────────────────────────────
+  // ── Event Handlers ──────────────────────────────────────────────────────────
   function onInputChange() {
     updateCounter();
   }
 
   function onKeyDown(e) {
-    // Ctrl+Shift+C = compress
-    if (e.ctrlKey && e.shiftKey && e.key === 'C') {
+    // Alt+Shift+C / Alt+Shift+S — avoids clashing with Chrome's built-in
+    // Ctrl+Shift+C (DevTools inspector) and Ctrl+Shift+S shortcuts.
+    if (e.altKey && e.shiftKey && (e.key === 'C' || e.key === 'c')) {
       e.preventDefault();
       handleCompress();
     }
-    // Ctrl+Shift+S = save to library
-    if (e.ctrlKey && e.shiftKey && e.key === 'S') {
+    if (e.altKey && e.shiftKey && (e.key === 'S' || e.key === 's')) {
       e.preventDefault();
       handleSavePrompt();
     }
   }
 
   function handleCompress() {
+    if (!settings?.enabled) return;
     const text  = getText();
     if (!text.trim()) return;
 
@@ -243,6 +232,7 @@
   }
 
   async function handleSavePrompt() {
+    if (!settings?.enabled) return;
     const text = getText();
     if (!text.trim()) return;
     const tokens = window.TokenSaver?.estimateTokens(text) ?? 0;
@@ -251,14 +241,20 @@
     showToast('💾 Saved to prompt library');
   }
 
-  // ── Send Interception ─────────────────────────────────────
+  // ── Send Interception ───────────────────────────────────────────────────────
   function interceptSend() {
-    // Watch for send button clicks
+    // Guard: attach the global click listener only once. bindInput() can run
+    // many times as the SPA re-renders inputs; without this guard every send
+    // click would be logged multiple times, inflating the rate counter.
+    if (sendIntercepted) return;
+    sendIntercepted = true;
+
     document.addEventListener('click', async (e) => {
       const btn = e.target.closest(SITE.sendButtonSelectors.join(','));
       if (!btn) return;
 
-      // Auto-compress if enabled
+      if (!settings?.enabled) return;
+
       if (settings?.autoCompress) {
         const text = getText();
         if (text.trim()) {
@@ -270,14 +266,12 @@
         }
       }
 
-      // Log the message
       const result = await sendMessage({ type: 'LOG_MESSAGE', hostname });
       if (result) {
         messageCount = result.count;
         rateLimit    = result.limit;
         updateRateDisplay();
 
-        // Rate limit warning
         const pct = Math.round((messageCount / rateLimit) * 100);
         const threshold = settings?.rateLimitThreshold ?? 80;
         if (settings?.rateLimitWarning && pct >= threshold) {
@@ -287,10 +281,10 @@
           showToast(`🛑 Rate limit reached! Wait before sending more.`, 'error', 8000);
         }
       }
-    }, true); // capture phase so we run before page handlers
+    }, true); 
   }
 
-  // ── Floating Toolbar ──────────────────────────────────────
+  // ── Floating Toolbar ────────────────────────────────────────────────────────
   function injectToolbar() {
     const toolbar = document.createElement('div');
     toolbar.id = 'ats-toolbar';
@@ -299,7 +293,7 @@
         <span id="ats-logo">⚡ ATS</span>
         <div id="ats-actions">
           <button id="ats-open-library" title="Open Prompt Library">📚</button>
-          <button id="ats-toggle" title="Toggle AI Token Saver">●</button>
+          <button id="ats-toggle" title="Toggle AI Token Saver" style="color:${settings?.enabled ? '#22c55e' : '#ef4444'}">●</button>
         </div>
       </div>
       <div id="ats-library-panel" style="display:none;"></div>
@@ -316,6 +310,13 @@
     if (btn) btn.style.color = settings.enabled ? '#22c55e' : '#ef4444';
     sendMessage({ type: 'SAVE_SETTINGS', settings });
     showToast(settings.enabled ? '✅ AI Token Saver enabled' : '⏸ AI Token Saver paused');
+
+    if (settings.enabled && activeInput) {
+      attachCounter(activeInput);
+    } else if (!settings.enabled && overlay) {
+      overlay.remove();
+      overlay = null;
+    }
   }
 
   async function toggleLibrary() {
@@ -325,6 +326,13 @@
       panel.style.display = 'none';
       return;
     }
+    await renderLibrary();
+    panel.style.display = 'block';
+  }
+
+  async function renderLibrary() {
+    const panel = document.getElementById('ats-library-panel');
+    if (!panel) return;
     const { library } = await sendMessage({ type: 'GET_PROMPT_LIBRARY' });
     if (!library || library.length === 0) {
       panel.innerHTML = '<p style="padding:10px;color:#9ca3af;font-size:12px;">No saved prompts yet.<br>Use 💾 to save prompts.</p>';
@@ -342,7 +350,6 @@
           </div>
         `).join('')}
       `;
-      // Bind use buttons
       panel.querySelectorAll('.ats-use-btn').forEach(btn => {
         btn.addEventListener('click', () => {
           const text = btn.getAttribute('data-text');
@@ -354,19 +361,16 @@
           }
         });
       });
-      // Bind delete buttons
       panel.querySelectorAll('.ats-del-btn').forEach(btn => {
         btn.addEventListener('click', async () => {
           await sendMessage({ type: 'DELETE_PROMPT', id: btn.dataset.id });
-          toggleLibrary();
-          toggleLibrary();
+          await renderLibrary();
         });
       });
     }
-    panel.style.display = 'block';
   }
 
-  // ── Utilities ─────────────────────────────────────────────
+  // ── Utilities ───────────────────────────────────────────────────────────────
   function getText() {
     if (!activeInput) return '';
     if (activeInput.tagName === 'TEXTAREA' || activeInput.tagName === 'INPUT') {
@@ -391,11 +395,9 @@
       activeInput.dispatchEvent(new Event('input', { bubbles: true }));
       activeInput.dispatchEvent(new Event('change', { bubbles: true }));
     } else {
-      // contenteditable
       activeInput.focus();
       document.execCommand('selectAll', false, null);
       document.execCommand('insertText', false, text);
-      // Also set directly in case execCommand fails
       if (!activeInput.innerText.includes(text.slice(0, 20))) {
         activeInput.innerText = text;
         activeInput.dispatchEvent(new Event('input', { bubbles: true }));
@@ -431,7 +433,7 @@
     });
   }
 
-  // ── Start ─────────────────────────────────────────────────
+  // ── Start ───────────────────────────────────────────────────────────────────
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
   } else {

@@ -1,13 +1,35 @@
 // ============================================================
 //  compressor.js — Smart text compression for AI prompts
 //  Three levels: light / medium / aggressive
+//  Code spans (```fenced``` and `inline`) are never modified.
 // ============================================================
 
-window.TokenSaver = window.TokenSaver || {};
+const root =
+  typeof window !== 'undefined'
+    ? window
+    : typeof globalThis !== 'undefined'
+    ? globalThis
+    : this;
+root.TokenSaver = root.TokenSaver || {};
 
-window.TokenSaver.compress = function compress(text, level = 'light') {
+root.TokenSaver.compress = function compress(text, level = 'light') {
   if (!text || text.trim().length === 0) return text;
 
+  // Never touch code: split on fenced (```…```) and inline (`…`) code
+  // spans, compress only the prose between them, then re-join. This
+  // prevents whitespace collapsing from mangling the user's code —
+  // the single most common "it broke my prompt" complaint.
+  const segments = splitOnCode(text);
+  const out = segments
+    .map((seg) => (seg.code ? seg.value : compressProse(seg.value, level)))
+    .join('');
+
+  // Trim only the outer edges, never the interior (which may hold code).
+  return out.replace(/^\n+/, '').replace(/[ \t\n]+$/, '');
+};
+
+function compressProse(text, level) {
+  if (!text) return text;
   let result = text;
 
   switch (level) {
@@ -25,8 +47,32 @@ window.TokenSaver.compress = function compress(text, level = 'light') {
       break;
   }
 
-  return result.trim();
-};
+  return result;
+}
+
+/**
+ * Split text into ordered segments, flagging which are code.
+ * Handles fenced blocks ```...``` (and ~~~) and inline `...` spans.
+ * Returns [{ value, code }] preserving original order and content.
+ */
+function splitOnCode(text) {
+  const segments = [];
+  // Fenced blocks first (greedy across newlines), then inline spans.
+  const re = /(```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]*`)/g;
+  let lastIndex = 0;
+  let match;
+  while ((match = re.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      segments.push({ value: text.slice(lastIndex, match.index), code: false });
+    }
+    segments.push({ value: match[0], code: true });
+    lastIndex = re.lastIndex;
+  }
+  if (lastIndex < text.length) {
+    segments.push({ value: text.slice(lastIndex), code: false });
+  }
+  return segments;
+}
 
 // ── Level 1: Light ─────────────────────────────────────────
 // Safe changes: whitespace, obvious redundancy
@@ -97,8 +143,15 @@ function applyMedium(text) {
     .replace(/\bI will\b/g, "I'll")
     .replace(/\bIt is\b/g, "It's")
     .replace(/\bThat is\b/g, "That's")
-    // Clean up double spaces left by removals
+    // Clean up artifacts left by word/phrase removals
     .replace(/  +/g, ' ')
+    // Orphaned punctuation left where a filler word used to be: " . ," → "."
+    .replace(/([.,;:!?])\s*[,;]\s*/g, '$1 ')
+    // Leading comma/semicolon at the start of a line or sentence
+    .replace(/([.!?]\s+)[,;]\s*/g, '$1')
+    .replace(/^\s*[,;]\s*/gm, '')
+    // Space before punctuation: "word ," → "word,"
+    .replace(/\s+([.,;:!?])/g, '$1')
     .replace(/\n +/g, '\n')
     .replace(/ +\n/g, '\n');
 }
@@ -145,16 +198,25 @@ function applyAggressive(text) {
 /**
  * Preview what each compression level would do.
  */
-window.TokenSaver.previewCompression = function(text) {
-  const { estimateTokens } = window.TokenSaver;
+root.TokenSaver.previewCompression = function (text) {
+  const { estimateTokens } = root.TokenSaver;
   const original = estimateTokens(text);
 
   const levels = ['light', 'medium', 'aggressive'];
-  return levels.map(level => {
-    const compressed = window.TokenSaver.compress(text, level);
+  return levels.map((level) => {
+    const compressed = root.TokenSaver.compress(text, level);
     const after = estimateTokens(compressed);
     const saved = Math.max(0, original - after);
-    const pct   = original > 0 ? Math.round((saved / original) * 100) : 0;
+    const pct = original > 0 ? Math.round((saved / original) * 100) : 0;
     return { level, text: compressed, original, after, saved, pct };
   });
 };
+
+// CommonJS export so Node tests can require() this file directly.
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    compress: root.TokenSaver.compress,
+    previewCompression: root.TokenSaver.previewCompression,
+    splitOnCode,
+  };
+}

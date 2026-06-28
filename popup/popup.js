@@ -16,9 +16,10 @@
     libraryList: document.getElementById('library-list'),
     libraryCount: document.getElementById('library-count'),
     resetBtn: document.getElementById('reset-stats-btn'),
+    settingsBtn: document.getElementById('settings-btn'),
   };
 
-  let settings = await window.ATSStorage.getSettings();
+  let settings = (await window.ATSStorage.getSettings()) || {};
 
   function render() {
     els.enabledToggle.checked = !!settings.enabled;
@@ -37,7 +38,7 @@
     await window.ATSStorage.saveSettings(settings);
   }
 
-  // ── Animated counter ───────────────────────────────────────
+  // ── Animated counter ────────────────────────────────────────────────────────
   function animateNumber(el, target) {
     const start = 0;
     const duration = 600;
@@ -51,11 +52,11 @@
     requestAnimationFrame(tick);
   }
 
-  // ── Stats ───────────────────────────────────────────────────
+  // ── Stats ───────────────────────────────────────────────────────────────────
   const stats = await window.ATSStorage.getStats();
   animateNumber(els.tokensSaved, stats?.totalSaved || 0);
 
-  // ── Site status for the active tab ──────────────────────────
+  // ── Site status for the active tab ──────────────────────────────────────────
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab?.url) {
@@ -74,7 +75,7 @@
     // not a supported tab, leave default message
   }
 
-  // ── Prompt library ───────────────────────────────────────────
+  // ── Prompt library ──────────────────────────────────────────────────────────
   async function renderLibrary() {
     const { library } = await window.ATSStorage.getLibrary();
     els.libraryCount.textContent = library?.length || 0;
@@ -102,12 +103,12 @@
   }
 
   function escapeHtml(str) {
-    return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
   await renderLibrary();
 
-  // ── Event bindings ───────────────────────────────────────────
+  // ── Event bindings ──────────────────────────────────────────────────────────
   els.enabledToggle.addEventListener('change', () => {
     settings.enabled = els.enabledToggle.checked;
     persist();
@@ -145,6 +146,14 @@
   els.resetBtn.addEventListener('click', async () => {
     await window.ATSStorage.resetStats();
     animateNumber(els.tokensSaved, 0);
+  });
+
+  els.settingsBtn.addEventListener('click', () => {
+    if (chrome.runtime.openOptionsPage) {
+      chrome.runtime.openOptionsPage();
+    } else {
+      window.open(chrome.runtime.getURL('options/options.html'));
+    }
   });
 
   render();

@@ -16,10 +16,11 @@ const DEFAULT_SETTINGS = {
     'chatgpt.com':           { enabled: true, messagesPerHour: 40 },
     'chat.openai.com':       { enabled: true, messagesPerHour: 40 },
     'gemini.google.com':     { enabled: true, messagesPerHour: 60 },
+    'aistudio.google.com':   { enabled: true, messagesPerHour: 60 },
     'perplexity.ai':         { enabled: true, messagesPerHour: 50 },
+    'chat.deepseek.com':     { enabled: true, messagesPerHour: 50 },
     'copilot.microsoft.com': { enabled: true, messagesPerHour: 30 },
     'poe.com':               { enabled: true, messagesPerHour: 30 },
-    'character.ai':          { enabled: true, messagesPerHour: 50 },
     'you.com':               { enabled: true, messagesPerHour: 50 },
   }
 };
@@ -100,6 +101,41 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       }
 
       case 'GET_PROMPT_LIBRARY': {
+        const data = await getLocalData();
+        sendResponse({ library: data.promptLibrary || [] });
+        break;
+      }
+
+      case 'IMPORT_LIBRARY': {
+        // Merge imported prompts with the existing library, de-duping by
+        // text. Imported entries are validated/normalized so a malformed
+        // file can't corrupt storage.
+        const data = await getLocalData();
+        const existing = data.promptLibrary || [];
+        const incoming = Array.isArray(msg.library) ? msg.library : [];
+        const seen = new Set(existing.map((p) => p.text));
+        let added = 0;
+        for (const raw of incoming) {
+          if (!raw || typeof raw.text !== 'string' || !raw.text.trim()) continue;
+          if (seen.has(raw.text)) continue;
+          seen.add(raw.text);
+          existing.push({
+            id: (raw.id && String(raw.id)) || `${Date.now()}-${added}`,
+            title: String(raw.title || raw.text.slice(0, 60)),
+            text: raw.text,
+            tokens: Number(raw.tokens) || 0,
+            created: Number(raw.created) || Date.now(),
+          });
+          added++;
+        }
+        existing.sort((a, b) => (b.created || 0) - (a.created || 0));
+        if (existing.length > 100) existing.splice(100);
+        await chrome.storage.local.set({ promptLibrary: existing });
+        sendResponse({ ok: true, added, total: existing.length });
+        break;
+      }
+
+      case 'EXPORT_LIBRARY': {
         const data = await getLocalData();
         sendResponse({ library: data.promptLibrary || [] });
         break;

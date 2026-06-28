@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AI Token Saver — Settings</title>
+<link rel="stylesheet" href="options.css" />
+</head>
+<body>
+  <div class="wrap">
+    <header class="hd">
+      <div class="brand">
+        <span class="mark">⚡</span>
+        <div>
+          <h1>AI Token Saver</h1>
+          <p class="sub">Settings &amp; advanced options</p>
+        </div>
+      </div>
+      <span class="ver" id="version-tag">v1.1.0</span>
+    </header>
+
+    <section class="card">
+      <h2>Per-site rate limits</h2>
+      <p class="hint">Estimated messages allowed per hour. The counter warns you as you
+        approach these. Tune them to match each platform's real limits on your plan.</p>
+      <div id="sites-list" class="sites"></div>
+    </section>
+
+    <section class="card">
+      <h2>Token estimate model</h2>
+      <p class="hint">Different model families tokenize slightly differently. Pick the one
+        you use most to bias the live estimate. (It's always a local estimate — no data
+        leaves your browser.)</p>
+      <div class="seg" id="model-seg">
+        <button data-model="generic">Generic</button>
+        <button data-model="gpt">GPT / ChatGPT</button>
+        <button data-model="claude">Claude</button>
+        <button data-model="gemini">Gemini</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Prompt library</h2>
+      <p class="hint">Back up your saved prompts or move them to another browser.</p>
+      <div class="btn-row">
+        <button id="export-btn" class="btn">⬇ Export as JSON</button>
+        <label class="btn" for="import-file">⬆ Import from JSON</label>
+        <input type="file" id="import-file" accept="application/json,.json" hidden />
+      </div>
+      <p class="status" id="lib-status"></p>
+    </section>
+
+    <section class="card danger">
+      <h2>Reset</h2>
+      <p class="hint">Clears your lifetime token-savings counter and message history.
+        Your saved prompts are kept.</p>
+      <button id="reset-btn" class="btn btn-danger">Reset stats</button>
+      <p class="status" id="reset-status"></p>
+    </section>
+
+    <footer class="ft">
+      <span>Made with ⚡ — save tokens, ship faster</span>
+      <a href="https://github.com/AmIrRX0/Ai-token-optimizer" target="_blank" rel="noopener">View on GitHub ↗</a>
+    </footer>
+  </div>
+
+  <script src="../utils/storage.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>
