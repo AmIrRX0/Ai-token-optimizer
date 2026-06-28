@@ -17,8 +17,6 @@ A free, open-source browser extension that shows a **live token counter**, **com
 
 <br>
 
-<img src="docs/hero.png" alt="AI Token Saver live counter and compress button on a chat page" width="720">
-
 <sub>⤴ Replace this with a real screenshot — see <code>docs/README.md</code>.</sub>
 
 </div>
