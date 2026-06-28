@@ -163,6 +163,15 @@ are **stay dependency-free**, **keep token claims honest**, and **never mangle u
 
 ---
 
+## 📚 Documentation
+
+- [**Tokens 101**](docs/TOKENS.md) — what tokens are, why they cost you every day, and how to use fewer
+- [**Limitations & honest scope**](LIMITATIONS.md) — exactly what the extension can and can't do
+- [**Changelog**](CHANGELOG.md) — version history
+- [**Contributing**](CONTRIBUTING.md) — dev setup and PR guide
+
+---
+
 ## ⭐ Like it?
 
 If this saves you tokens, **star the repo** — it genuinely helps others find it, and it's
