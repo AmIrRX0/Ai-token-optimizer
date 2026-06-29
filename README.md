@@ -1,3 +1,16 @@
+<!-- Language switcher banner -->
+<div align="center">
+  <a href="README.md">
+    <img src="https://img.shields.io/badge/🇬🇧_English-0d0f0a?style=for-the-badge&labelColor=d4ff3d&color=0d0f0a" alt="English">
+  </a>
+  &nbsp;
+  <a href="README.fa.md">
+    <img src="https://img.shields.io/badge/🇮🇷_فارسی-0d0f0a?style=for-the-badge&labelColor=5b8df7&color=0d0f0a" alt="فارسی">
+  </a>
+</div>
+
+<br>
+
 <div align="center">
 
 # ⚡ AI Token Saver
@@ -14,6 +27,10 @@ A free, open-source browser extension that shows a **live token counter**, **com
 ![No dependencies](https://img.shields.io/badge/dependencies-0-d4ff3d?style=flat-square&labelColor=0d0f0a)
 [![CI](https://github.com/AmIrRX0/Ai-token-optimizer/actions/workflows/ci.yml/badge.svg)](https://github.com/AmIrRX0/Ai-token-optimizer/actions/workflows/ci.yml)
 ![License](https://img.shields.io/badge/license-MIT-8a9080?style=flat-square&labelColor=0d0f0a)
+
+<br>
+
+🌐 **Languages:** **English** · [فارسی](README.fa.md)
 
 <br>
 
